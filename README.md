@@ -59,6 +59,12 @@ Please report Linux-specific issues at https://github.com/DrSkyfaR/DualCPY-Linux
 - **FPS selector** and **Restart** button in the control panel (@tommywaaf)
 - Undocked windows keep their window-manager title bars for easy resizing and moving
 - Tuned scrcpy launch for low latency; requires **scrcpy v4.0+**
+- Config, logs, and cached state now live in your OS-standard user directories
+  (via `platformdirs`) instead of next to the executable, so DualCPY can be
+  installed system-wide and launched from anywhere
+- Discord audio routing split into two independent behaviors — game audio to
+  speakers always works, while mic-mixing/auto-capture is a separate opt-out
+  toggle (see [Configuration](#configuration))
 
 See the full [CHANGELOG](CHANGELOG.md) for details.
 
@@ -91,8 +97,12 @@ See the full [CHANGELOG](CHANGELOG.md) for details.
 - Gamepad passthrough to the device (`--gamepad=uhid` on the top screen)
 - FPS selector and restart controls in the panel
 - Real-time positioning to move the screens into any arrangement
-- **Linux extra:** optional Discord audio routing via PipeWire/PulseAudio so game
-  audio is captured automatically during a screen-share
+- **Linux extra:** optional audio routing via PipeWire/PulseAudio. Game audio is
+  always mirrored to your speakers; a separate toggle additionally mixes your mic
+  into a combined sink and sets it as the system default input, so Discord
+  auto-captures both without changing its input device. Disable the mic-mixing
+  toggle if you use EasyEffects or another tool that manages your default mic
+  input — see [Configuration](#configuration)
 
 ## Installation
 
@@ -122,48 +132,49 @@ sudo apt install git adb scrcpy python3-dev python3-xlib python3-venv build-esse
 ```
 > On older Debian, `scrcpy` may be available via backports.
 
-### Option 1: Install from the AUR (Arch / CachyOS / Manjaro)
-
-DualCPY-Linux is on the [AUR](https://aur.archlinux.org/packages/dualcpy-linux).
-With an AUR helper:
-
-```bash
-paru -S dualcpy-linux
-# or
-yay -S dualcpy-linux
-```
-
-This installs DualCPY system-wide and adds it to your application launcher.
-All dependencies (including `scrcpy`, `tk`, and `python-customtkinter`) are
-pulled in automatically. Launch it from your menu as **DualCPY**, or run
-`dualcpy-linux` from a terminal.
-
-> The AUR package is maintained by [@theswest](https://github.com/theswest).
-> Report packaging issues on the AUR page; report app bugs here.
-
-### Option 2: Run from Source (recommended for non-Arch users)
-```bash
-git clone https://github.com/DrSkyfaR/DualCPY-Linux.git
-cd DualCPY-Linux
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python main.py
-```
-> Using fish or csh? Use the following activation script instead: `source venv/bin/activate.fish` (fish) or `activate.csh` (csh).
-
-> Re-activate the venv (`source venv/bin/activate`) before running in later sessions.
-
-### Option 3: Build a Standalone Executable
+### Build a Standalone Executable
 ```bash
 source venv/bin/activate
 pip install pyinstaller
 python build.py
-# Find your build in dist/DualCPY/
+# Your binary will be in dist/
 ```
 
-**Note:** unlike the Windows build, scrcpy and ADB are **not bundled** on Linux —
-they come from your system (or are auto-installed via `pkexec`).
+#### Config and logs
+Configurations and Logs have been updated to live in your OS-standard user
+directories (see [Configuration](#configuration)), so the resulting binary can
+be copied or symlinked anywhere on your system, including onto your `PATH`.
+
+### Option 4: Build & Install System-Wide via Makefile
+
+A `Makefile` is provided for installing the built binary, desktop entry, and
+icon into standard Linux locations (defaults to `/usr`, following Arch
+packaging conventions). Build unprivileged, install privileged:
+
+```bash
+# 1. Explicit Build, Optional
+make build
+
+# 2. Install Built Binary System-wide
+sudo make install
+
+# Launch from anywhere:
+DualCPY
+# or find "DualCPY" in your application launcher
+
+# To remove:
+sudo make uninstall
+```
+
+To install into a different prefix (e.g. a user-local install with no root
+required):
+```bash
+make install PREFIX=$HOME/.local DESTDIR=
+```
+
+A `PKGBUILD` targeting this Makefile is also included for building an Arch
+package directly (`makepkg -si`), independent of the AUR package in Option 1.
+But this fork has not been added to the AUR, as of yet.
 
 ## Requirements
 
@@ -180,6 +191,7 @@ Installed with `pip install -r requirements.txt`:
 - `mss` — cross-platform screenshots
 - `darkdetect` — appearance-mode detection
 - `python-xlib` — X11 window management (Linux only)
+- `platformdirs` — resolves OS-standard config/log directories
 - `pyinstaller` — only needed to build a standalone executable
 
 ## Usage
@@ -209,7 +221,7 @@ The control panel appears on the right-hand side of your screen:
 - **Window controls:**
   - **Undock** — separate into independent, title-barred floating windows (for individual capture)
   - **Dock** — bring undocked windows back into one unified container (X11 only)
-  - **Screenshot** — capture the docked view to a PNG in `screenshots/`
+  - **Screenshot** — capture the docked view to a PNG in your screenshots location
 - **File Transfer** — open the file browser to move files between your PC and device
 - **Presets** — name a layout and **Save**; **Load** / **Del** next to a saved preset
 
@@ -223,7 +235,27 @@ The control panel appears on the right-hand side of your screen:
 
 ## Configuration
 
-### Layouts / Presets — `config/layout.json`
+As of v1.0.0, config and logs are **not** stored next to the executable or in
+the project directory — they live in your OS-standard user directories,
+resolved via `platformdirs`. On Linux this is typically:
+
+```bash
+# Config directory
+~/.config/DualCPY-Linux/
+
+# Log directory
+~/.local/state/DualCPY-Linux/log/
+```
+
+You can print the exact resolved paths for your system at any time with:
+```bash
+python3 -c "from platformdirs import user_config_dir, user_log_dir; print(user_config_dir('DualCPY-Linux','the_swest')); print(user_log_dir('DualCPY-Linux','the_swest'))"
+```
+
+On first run, default config files are seeded into the config directory
+automatically.
+
+### Layouts / Presets — `<config_dir>/layout.json`
 ```json
 {
     "Default":   { "tx": 0,   "ty": 0,  "bx": 251, "by": 648, "global_scale": 0.6 },
@@ -231,7 +263,7 @@ The control panel appears on the right-hand side of your screen:
 }
 ```
 
-### General Config — `config/config.json`
+### General Config — `<config_dir>/config.json`
 ```json
 {
     "tx": 0, "ty": 0, "bx": 250, "by": 648, "global_scale": 0.6,
@@ -242,10 +274,18 @@ The control panel appears on the right-hand side of your screen:
 }
 ```
 
-### Custom Profiles — `config/custom_profiles.json`
+> **`discord_audio_routing`** controls mic-mixing only. Game audio → speakers
+> loopback is always active on Linux regardless of this setting. When `true`
+> (default), your system's default mic input is also reassigned to a combined
+> mic+game sink so Discord auto-captures both — this **will conflict** with
+> EasyEffects or any other tool that manages your default mic input itself.
+> Set to `false` to leave your mic input completely untouched; DualCPY will
+> still route game audio to your speakers.
+
+### Custom Profiles — `<config_dir>/custom_profiles.json`
 User-defined device profiles created in the profile editor are stored here.
 
-### Logging — `logs/`
+### Logging — `<log_dir>/`
 - `dualcpy_YYYYMMDD.log` — main application log
 - `scrcpy_top_YYYYMMDD_HHMMSS.log` / `scrcpy_bottom_YYYYMMDD_HHMMSS.log` — per-window scrcpy output
 
@@ -261,7 +301,9 @@ logging.basicConfig(
 
 ### Layout issues
 - Load a preset at 0.6 global scale and save it.
-- Delete `config/layout.json` and `config/config.json` so they are regenerated.
+- Delete `layout.json` and `config.json` from your config directory (see
+  [Configuration](#configuration) for the path) so they are regenerated on
+  next launch.
 
 ### Device not found
 - Ensure USB debugging is enabled — try a different (data, not charging-only) cable.
@@ -271,7 +313,8 @@ logging.basicConfig(
 
 ### scrcpy won't start
 - Ensure `scrcpy` (≥ 4.0) is installed and on your `PATH`.
-- Check the per-window logs in `logs/` for the exact error.
+- Check the per-window logs in your log directory (see
+  [Configuration](#configuration)) for the exact error.
 - Try running scrcpy manually: `scrcpy -s YOUR_DEVICE_SERIAL`
 - Ensure your device exposes the display IDs expected by your profile.
 
@@ -297,6 +340,11 @@ logging.basicConfig(
 ### Gamepad not detected
 - You may need to reconnect your controller while DualCPY-Linux is running — this is
   an Android limitation with `--gamepad=uhid`.
+
+### Mic sounds wrong / EasyEffects stops working while DualCPY runs
+- Set `"discord_audio_routing": false` in your config (see
+  [Configuration](#configuration)). This disables mic-mixing and default-source
+  reassignment entirely; game audio still routes to your speakers as normal.
 
 ### Missing module / import errors
 - Activate the venv and reinstall: `pip install -r requirements.txt --force-reinstall`

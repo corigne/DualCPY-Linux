@@ -166,10 +166,18 @@ class AudioRouter:
     On teardown() the original default source is restored and all modules are removed.
     """
 
-    def __init__(self):
+    def __init__(self, mix_mic=True):
+        """
+        mix_mic: if True (default), also creates the combined mic+game sink
+            and reassigns the OS default source to it, so Discord auto-captures
+            both. If False, only routes game audio to speakers — your mic input
+            is left completely untouched (use this if you run EasyEffects or
+            any other tool that manages your mic's default source itself).
+        """
         self._module_ids = []
         self._original_default_source = None
         self._active = False
+        self._mix_mic = mix_mic
 
     @staticmethod
     def is_supported():
@@ -223,10 +231,6 @@ class AudioRouter:
         return mod_id
 
     def setup(self):
-        """
-        Build the routing graph.
-        Returns an env dict for scrcpy (PULSE_SINK + SDL_AUDIODRIVER), or None on failure.
-        """
         if not self.is_supported():
             logger.warning("Audio routing unavailable: pactl not found")
             return None
@@ -234,40 +238,41 @@ class AudioRouter:
             return {"PULSE_SINK": GAME_SINK_NAME, "SDL_AUDIODRIVER": "pulseaudio"}
 
         try:
-            self._original_default_source = self._get_default_source()
-            logger.info(f"Saving default source: {self._original_default_source}")
-
             # 1. Game sink — scrcpy outputs here
             if not self._load_null_sink(GAME_SINK_NAME, GAME_SINK_DESCRIPTION):
                 return None
 
-            # 2. Game audio → speakers (local playback)
+            # 2. Game audio → speakers (local playback) — always safe, always on
             self._load_loopback(f"{GAME_SINK_NAME}.monitor", "@DEFAULT_SINK@")
 
-            # 3. Combined sink — mic + game mixed together
-            if not self._load_null_sink(COMBINED_SINK_NAME, COMBINED_SINK_DESCRIPTION):
-                return None
+            if self._mix_mic:
+                self._original_default_source = self._get_default_source()
+                logger.info(f"Saving default source: {self._original_default_source}")
 
-            # 4. Real microphone → combined (voice is preserved in Discord)
-            if self._original_default_source and ".monitor" not in self._original_default_source:
-                self._load_loopback(self._original_default_source, COMBINED_SINK_NAME)
+                # 3. Combined sink — mic + game mixed together
+                if not self._load_null_sink(COMBINED_SINK_NAME, COMBINED_SINK_DESCRIPTION):
+                    return None
 
-            # 5. Game audio → combined (Discord also captures game audio)
-            self._load_loopback(f"{GAME_SINK_NAME}.monitor", COMBINED_SINK_NAME)
+                # 4. Real microphone → combined
+                if self._original_default_source and ".monitor" not in self._original_default_source:
+                    self._load_loopback(self._original_default_source, COMBINED_SINK_NAME)
 
-            # 6. Set combined.monitor as default source — Discord picks it up automatically
-            result = subprocess.run(
-                ["pactl", "set-default-source", f"{COMBINED_SINK_NAME}.monitor"],
-                capture_output=True, text=True, timeout=5,
-            )
-            if result.returncode != 0:
-                logger.warning(f"Could not set default source: {result.stderr.strip()}")
+                # 5. Game audio → combined
+                self._load_loopback(f"{GAME_SINK_NAME}.monitor", COMBINED_SINK_NAME)
+
+                # 6. Set combined.monitor as default source
+                result = subprocess.run(
+                    ["pactl", "set-default-source", f"{COMBINED_SINK_NAME}.monitor"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if result.returncode != 0:
+                    logger.warning(f"Could not set default source: {result.stderr.strip()}")
+                else:
+                    logger.info(f"Default source → {COMBINED_SINK_NAME}.monitor (Discord auto-captures)")
             else:
-                logger.info(f"Default source → {COMBINED_SINK_NAME}.monitor (Discord auto-captures)")
+                logger.info("Mic mixing disabled — leaving default source untouched (mic-safe mode)")
 
             self._active = True
-            # SDL_AUDIODRIVER=pulseaudio forces SDL to use the PulseAudio compat layer
-            # so PULSE_SINK is honoured even on PipeWire
             return {"PULSE_SINK": GAME_SINK_NAME, "SDL_AUDIODRIVER": "pulseaudio"}
 
         except subprocess.TimeoutExpired:

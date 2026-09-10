@@ -29,7 +29,7 @@ $(DIST_BIN): $(SRC_FILES)
 	@if [ ! -f build.py ]; then \
 		echo "Error: build.py not found. Run this from the project root."; exit 1; \
 	fi
-	$(PYTHON) build.py
+	sh -c "source ./venv/bin/activate && $(PYTHON) build.py"
 	@if [ ! -f "$(DIST_BIN)" ]; then \
 		echo "Error: build did not produce $(DIST_BIN)."; exit 1; \
 	fi

@@ -22,17 +22,14 @@ import PyInstaller.__main__
 PyInstaller.__main__.run(
     [
         "main.py",
-        # --onedir (instead of --onefile) unpacks once on disk, so subsequent
-        # launches skip the per-run extraction step and start noticeably faster.
-        "--onedir",
+        "--onefile",
         "--noconsole",
         "--clean",
         "--name=DualCPY",
-        "--add-data=config;config",
-        "--add-data=bin;bin",
-        "--add-data=logs;logs",
-        "--add-data=assets/fonts;assets/fonts",
-        "--add-data=assets/icon.png;assets",
+        "--add-data=config:config",   # bundled as first-run default template
+        "--add-data=bin:bin",
+        "--add-data=assets/fonts:assets/fonts",
+        "--add-data=assets/icon.png:assets",
         "--icon=assets/icon.ico",
         "-y",
     ]

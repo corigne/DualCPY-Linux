@@ -27,6 +27,8 @@ import signal
 import re
 import threading
 
+from src.paths import BIN_DIR, LOG_DIR
+
 # Setup logger for this module
 logger = logging.getLogger(__name__)
 
@@ -387,7 +389,7 @@ class ScrcpyManager:
 
     def _resolve_bin(self, name):
         """
-        Finds binary in local ./bin folder or system path.
+        Finds binary in the bundled bin/ folder or system path.
 
         Args:
             name: Binary name (e.g., "scrcpy" or "adb")
@@ -397,19 +399,17 @@ class ScrcpyManager:
         """
         logger.debug(f"Resolving binary: {name}")
 
-        # Check local bin folder first
-        local = os.path.join(os.getcwd(), "bin", f"{name}.exe" if sys.platform == "win32" else name)
-        if os.path.exists(local):
-            logger.info(f"Found {name} in local bin folder: {local}")
-            return local
+        bundled = os.path.join(BIN_DIR, f"{name}.exe" if sys.platform == "win32" else name)
+        if os.path.exists(bundled):
+            logger.info(f"Found {name} in bundled bin folder: {bundled}")
+            return bundled
 
-        # Fallback to system PATH
         found = shutil.which(name)
         if found:
             logger.info(f"Found {name} in system PATH: {found}")
             return found
 
-        logger.warning(f"Binary '{name}' not found in local bin or system PATH")
+        logger.warning(f"Binary '{name}' not found in bundled bin or system PATH")
         return None
 
     def install_adb(self):
@@ -1055,7 +1055,7 @@ class ScrcpyManager:
                 # Create log file for subprocess output
                 logfile = None
                 try:
-                    logs_dir = os.path.join(os.getcwd(), "logs")
+                    logs_dir = LOG_DIR
                     os.makedirs(logs_dir, exist_ok=True)
                     stamp = time.strftime("%Y%m%d_%H%M%S")
                     log_path = os.path.join(logs_dir, f"scrcpy_{label}_{stamp}.log")

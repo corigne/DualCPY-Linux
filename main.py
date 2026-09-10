@@ -28,8 +28,8 @@ import logging
 import time
 import platform
 import signal
-import threading
 from src.launcher import Launcher
+from platformdirs import user_config_dir, user_log_dir
 
 # Global flag for signal handling - shared between main and launcher
 _shutdown_requested = False
@@ -40,34 +40,30 @@ def signal_handler(signum, frame):
     print("\n[INFO] Shutdown requested (Ctrl+C)")
     _shutdown_requested = True
 
-REQUIRED_FOLDERS = ["bin", "config", "logs"] # List of required folders that must exist in order to function
-LOG_MULT = 60 # Amount of = to put in the logs as seperators
+from src.paths import BUNDLED_PATH, BIN_DIR, CONFIG_DIR, LOG_DIR, ensure_user_dirs
+
+REQUIRED_BUNDLED_FOLDERS = ["bin"]
+LOG_MULT = 60
+
+def get_bundled_path() -> str:
+    """Path to read-only resources bundled inside the frozen app (e.g. bin/)."""
+    if hasattr(sys, "_MEIPASS"):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))
+
+BUNDLED_PATH = get_bundled_path()
+CONFIG_DIR = user_config_dir(__app_name__, __author__)
+LOG_DIR = user_log_dir(__app_name__, __author__)
 
 # Windows-specific constants
-if sys.platform == "win32":
-    import ctypes
-    WIN11_LOWEST_BUILD = 22000 # Lowest build number of Windows 11
-    MB_ICONERROR = 0x10 # Windows error messagebox flag
-
-
 def setup_logging():
-    """
-    Configure logging
-    """
-    log_dir = os.path.join(
-        os.path.dirname(sys.executable if hasattr(sys, "_MEIPASS") else __file__),
-        "logs",
-    )
-    os.makedirs(log_dir, exist_ok=True)
-
-    log_file = os.path.join(log_dir, f"dualcpy_{time.strftime('%Y%m%d')}.log")
-
+    os.makedirs(LOG_DIR, exist_ok=True)
+    log_file = os.path.join(LOG_DIR, f"dualcpy_{time.strftime('%Y%m%d')}.log")
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[logging.FileHandler(log_file, encoding="utf-8"), logging.StreamHandler()],
     )
-
 
 def check_windows_version():
     """
@@ -142,37 +138,18 @@ def show_fatal_error(title: str, message: str):
 
 
 def check_runtime_structure():
-    """
-    Checks that all required folders exist in the application directory.
-    Is used when running from python files and with a pyinstaller exe.
-    """
     logger = logging.getLogger(__name__)
-
-    # Path logic for pyinstaller exe files
-    if hasattr(sys, "_MEIPASS"):
-        base = os.path.dirname(sys.executable)
-    else:
-        base = os.path.dirname(os.path.abspath(__file__))
-
-    # List the missing files and return an error
-    missing = [f for f in REQUIRED_FOLDERS if not os.path.isdir(os.path.join(base, f))]
-
+    missing = [f for f in REQUIRED_BUNDLED_FOLDERS if not os.path.isdir(os.path.join(BUNDLED_PATH, f))]
     if missing:
         msg = (
-            f"DualCPY failed to start.\n\n"
-            f"Missing required folders:\n"
-            f"{', '.join(missing)}\n\n"
-            f"DualCPY must be installed with:\n"
-            f"bin/, config/, logs/\n\n"
-            f"Please reinstall or extract the full build."
+            f"DualCPY failed to start.\n\nMissing bundled resources:\n{', '.join(missing)}\n\n"
+            f"This build appears corrupted or incomplete.\nPlease reinstall or re-download DualCPY."
         )
-
-        # Log error and show fatal error, also print to console
         logger.critical(msg)
         print(msg)
         show_fatal_error("DualCPY Startup Error", msg)
         sys.exit(1)
-
+    ensure_user_dirs()
 
 def set_dpi_awareness():
     """Set DPI awareness on Windows."""

@@ -13,6 +13,7 @@ except:
 # Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from src.paths import CONFIG_DIR
 from src.scrcpy_manager import (
     ScrcpyManager, TOP_SCREEN_WINDOW_TITLE, BOTTOM_SCREEN_WINDOW_TITLE, DEFAULT_MAX_FPS,
 )
@@ -105,9 +106,9 @@ class Launcher:
         logger.info("Initializing Launcher")
 
         # Load config managers
-        self.store = PresetStore("config/layout.json")
-        self.config = ConfigManager("config/config.json")
-        self.custom_profiles = CustomProfileStore("config/custom_profiles.json")
+        self.store = PresetStore(os.path.join(CONFIG_DIR, "layout.json"))
+        self.config = ConfigManager(os.path.join(CONFIG_DIR, "config.json"))
+        self.custom_profiles = CustomProfileStore(os.path.join(CONFIG_DIR, "custom_profiles.json"))
 
         # Load scale or use the default
         self.global_scale = self.config.get(

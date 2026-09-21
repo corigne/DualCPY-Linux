@@ -356,7 +356,8 @@ class ScrcpyManager:
         self.enable_audio_top = enable_audio_top
 
         # Audio routing for Discord screen-share (Linux only)
-        self._audio_router = AudioRouter() if (discord_audio_routing and sys.platform == "linux") else None
+        self.discord_audio_routing = bool(discord_audio_routing)
+        self._audio_router = AudioRouter() if (self.discord_audio_routing and sys.platform == "linux") else None
 
         # Window resolutions derived from the device profile + scale.
         # Bottom is sized by the physical width ratio so both panels share a
@@ -391,6 +392,24 @@ class ScrcpyManager:
 
         # Connection mode tracking (usb/wireless)
         self.connection_mode = None
+
+    def set_discord_audio_routing(self, enabled: bool):
+        """
+        Enable/disable Discord audio mux (Linux only) without recreating the
+        whole manager. Tears down any active routing before switching off, and
+        lazily creates a fresh AudioRouter when switching on. Takes full effect
+        on the next scrcpy (re)start, since routing is (re)applied in start().
+        """
+        enabled = bool(enabled) and sys.platform == "linux"
+        if enabled == self.discord_audio_routing and (self._audio_router is not None) == enabled:
+            return
+        self.discord_audio_routing = enabled
+        if not enabled and self._audio_router is not None:
+            self._audio_router.teardown()
+            self._audio_router = None
+        elif enabled and self._audio_router is None:
+            self._audio_router = AudioRouter()
+        logger.info(f"Discord audio routing set to {enabled}")
 
     def _resolve_bin(self, name):
         """

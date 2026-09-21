@@ -399,6 +399,43 @@ class CTkUI:
             font=make_font(13),
         ).pack(fill="x", padx=16, pady=(4, 0))
 
+        self._separator()
+
+        self._section("Audio")
+
+        self._audio_enabled_var = tk.BooleanVar(value=self.l.audio_enabled)
+        ctk.CTkCheckBox(
+            self._scroll,
+            text="Enable Audio Streaming",
+            variable=self._audio_enabled_var,
+            command=self._on_audio_enabled_toggle,
+            font=make_font(13),
+            text_color=TEXT_COLOUR,
+            fg_color=ACCENT_COLOUR,
+            hover_color=ACCENT2_COLOUR,
+            border_color=BORDER_COLOUR,
+        ).pack(anchor="w", padx=16, pady=(2, 4))
+
+        self._discord_audio_var = tk.BooleanVar(value=self.l.discord_audio_routing)
+        ctk.CTkCheckBox(
+            self._scroll,
+            text="Discord Audio Mux (route audio for screen-share capture)",
+            variable=self._discord_audio_var,
+            command=self._on_discord_audio_toggle,
+            font=make_font(13),
+            text_color=TEXT_COLOUR,
+            fg_color=ACCENT_COLOUR,
+            hover_color=ACCENT2_COLOUR,
+            border_color=BORDER_COLOUR,
+        ).pack(anchor="w", padx=16, pady=(0, 4))
+
+        self._audio_notice = ctk.CTkLabel(
+            self._scroll, text="",
+            text_color=WARNING_COLOUR,
+            font=make_font(11),
+        )
+        self._audio_notice.pack(anchor="w", padx=16, pady=(0, 2))
+
         # Determine the display name of the initial loaded profile
         current_prof = self.l.scrcpy.profile
         display_name = current_prof.nickname.strip() if getattr(current_prof, "nickname", "") else current_prof.name
@@ -639,11 +676,32 @@ class CTkUI:
         except Exception as e:
             logger.error(f"FPS change error: {e}")
 
+    def _on_audio_enabled_toggle(self):
+        enabled = self._audio_enabled_var.get()
+        if hasattr(self.l, "save_audio_enabled"):
+            self.l.save_audio_enabled(enabled)
+        self._audio_notice.configure(text="Restart required to apply audio changes")
+        self.show_status(
+            f"Audio streaming {'enabled' if enabled else 'disabled'} - click Restart to apply",
+            "info",
+        )
+
+    def _on_discord_audio_toggle(self):
+        enabled = self._discord_audio_var.get()
+        if hasattr(self.l, "save_discord_audio_routing"):
+            self.l.save_discord_audio_routing(enabled)
+        self._audio_notice.configure(text="Restart required to apply audio changes")
+        self.show_status(
+            f"Discord audio mux {'enabled' if enabled else 'disabled'} - click Restart to apply",
+            "info",
+        )
+
     def _on_restart(self):
         if hasattr(self.l, "restart_app"):
             self._scale_changed = False
             self._original_scale = self.l.global_scale
             self._scale_notice.configure(text="")
+            self._audio_notice.configure(text="")
             self.show_status("Restarting…", "info")
             self.l.restart_app()
 

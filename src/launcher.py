@@ -125,7 +125,12 @@ class Launcher:
         logger.info(f"Swap Screens: {self.swap_screens}")
 
         # Load Discord audio routing preference (Linux only — harmless to store on any OS)
-        discord_audio_routing = self.config.get("discord_audio_routing", True)
+        self.discord_audio_routing = self.config.get("discord_audio_routing", True)
+        logger.info(f"Discord Audio Routing: {self.discord_audio_routing}")
+
+        # Load master audio streaming toggle (enables/disables device audio entirely)
+        self.audio_enabled = self.config.get("audio_enabled", True)
+        logger.info(f"Audio Streaming Enabled: {self.audio_enabled}")
 
         # Load FPS cap preference (applies to the top window; bottom is capped to <=60)
         self.max_fps = int(self.config.get("max_fps", DEFAULT_MAX_FPS))
@@ -133,7 +138,8 @@ class Launcher:
 
         # Initialize Scrcpy with the saved scale
         self.scrcpy = ScrcpyManager(scale=self.launch_scale,
-                                    discord_audio_routing=discord_audio_routing,
+                                    enable_audio_top=self.audio_enabled,
+                                    discord_audio_routing=self.discord_audio_routing,
                                     max_fps=self.max_fps)
 
         # Calculate the forced layout (Top at 0,0 - bottom centred underneath) with scaled dimensions
@@ -447,7 +453,8 @@ class Launcher:
         """Rebuild the scrcpy manager for a chosen profile (keeps scale/fps)."""
         self.scrcpy = ScrcpyManager(
             scale=self.launch_scale,
-            discord_audio_routing=self.config.get("discord_audio_routing", True),
+            enable_audio_top=self.audio_enabled,
+            discord_audio_routing=self.discord_audio_routing,
             max_fps=self.max_fps,
             profile=profile,
         )
@@ -540,6 +547,29 @@ class Launcher:
         if self.scrcpy:
             self.scrcpy.max_fps = self.max_fps
         logger.info(f"Saved max_fps preference: {self.max_fps}")
+
+    def save_discord_audio_routing(self, value):
+        """
+        Saves the Discord audio mux preference (routes audio through a virtual
+        PipeWire sink so Discord screen-share auto-captures it). Linux only;
+        takes effect on the next scrcpy (re)start.
+        """
+        self.discord_audio_routing = bool(value)
+        self.config.set("discord_audio_routing", self.discord_audio_routing)
+        if self.scrcpy:
+            self.scrcpy.set_discord_audio_routing(self.discord_audio_routing)
+        logger.info(f"Saved discord_audio_routing preference: {self.discord_audio_routing}")
+
+    def save_audio_enabled(self, value):
+        """
+        Saves the master audio-streaming toggle (enables/disables device audio
+        entirely). Takes effect on the next scrcpy (re)start.
+        """
+        self.audio_enabled = bool(value)
+        self.config.set("audio_enabled", self.audio_enabled)
+        if self.scrcpy:
+            self.scrcpy.enable_audio_top = self.audio_enabled
+        logger.info(f"Saved audio_enabled preference: {self.audio_enabled}")
 
     # ── Adapter methods consumed by the customtkinter control panel ──────────
     def set_max_fps(self, value):
